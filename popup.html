@@ -12,6 +12,9 @@ body{width:560px;height:580px;background:#0f0f17;color:#c4c4e0;font-family:'Micr
 #search{background:#13131f;border:1px solid #1e1e30;border-radius:7px;color:#c4c4e0;padding:5px 10px;font-size:12px;outline:none;width:165px;font-family:inherit}
 #search:focus{border-color:#6366f1}
 #search::placeholder{color:#3a3a55}
+.toolbar{display:flex;gap:5px;padding:6px 10px;background:#0a0a13;border-bottom:1px solid #1e1e30;align-items:center}
+.toolbar button,.toolbar select{background:#181828;border:1px solid #343452;border-radius:5px;color:#c4c4e0;padding:5px 8px;cursor:pointer;font:inherit;font-size:11px}
+.toolbar select{margin-left:auto}
 
 .body{display:flex;flex:1;overflow:hidden}
 
@@ -111,13 +114,18 @@ body{width:560px;height:580px;background:#0f0f17;color:#c4c4e0;font-family:'Micr
 <body>
 
 <div class="top">
-  <div class="logo"><div class="ldot"></div>YouTube 时间点笔记</div>
+  <div class="logo"><div class="ldot"></div><span id="logo-text">YouTube 时间点笔记</span></div>
   <input id="search" placeholder="搜索视频或笔记…">
+</div>
+<div class="toolbar">
+  <button id="export-backup">导出备份</button><button id="import-backup">导入备份</button>
+  <input id="backup-file" type="file" accept="application/json,.json" hidden>
+  <select id="language" aria-label="Language"><option value="zh">中文</option><option value="en">English</option></select>
 </div>
 
 <div class="body">
   <div class="sb">
-    <div class="sb-title">文件夹</div>
+    <div class="sb-title" id="folder-label">文件夹</div>
     <div id="flist"></div>
     <button class="addbtn" id="addbtn">＋ 新建文件夹</button>
   </div>
@@ -133,7 +141,7 @@ body{width:560px;height:580px;background:#0f0f17;color:#c4c4e0;font-family:'Micr
 <!-- 新建文件夹弹窗 -->
 <div class="overlay" id="overlay">
   <div class="modal">
-    <h3>📁 新建文件夹</h3>
+    <h3 id="modal-title">📁 新建文件夹</h3>
     <input class="minput" id="fname" placeholder="如：金融学习、日常娱乐…">
     <div class="clrs" id="clrs"></div>
     <div class="mbtns">

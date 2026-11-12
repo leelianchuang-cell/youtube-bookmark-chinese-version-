@@ -3,6 +3,32 @@
 (function () {
   'use strict';
 
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message?.type !== 'capture-timestamp') return;
+    const panel = document.getElementById('yt-notes-panel');
+    const button = document.getElementById('capture-btn');
+    if (panel && button) { panel.classList.remove('collapsed'); button.click(); }
+  });
+  let language = 'zh';
+  const tr = (zh, en) => language === 'en' ? en : zh;
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'local' || !changes.language) return;
+    language = changes.language.newValue === 'en' ? 'en' : 'zh';
+    const panel = document.getElementById('yt-notes-panel');
+    if (!panel) return;
+    document.getElementById('expand-btn').title = tr('展开笔记', 'Expand notes');
+    panel.querySelector('.panel-title').lastChild.textContent = tr(' 视频笔记', ' Video notes');
+    document.getElementById('folder-assign-btn').title = tr('归档到文件夹', 'Move to folder');
+    document.getElementById('collapse-btn').title = tr('收起', 'Collapse');
+    document.getElementById('capture-btn').textContent = tr('⏱ 标记时间点', '⏱ Mark time');
+    document.getElementById('note-input').placeholder = tr('输入笔记内容...（可不填，仅记录时间点）', 'Write a note... (optional)');
+    document.getElementById('save-note-btn').textContent = tr('💾 保存笔记', '💾 Save note');
+    document.getElementById('clear-all-btn').textContent = tr('清空', 'Clear all');
+    document.getElementById('folder-picker').style.display = 'none';
+    // Do not discard an unsaved inline edit when the language changes.
+    if (!panel.querySelector('.editing')) refreshPanel();
+  });
+
   let videoId = null;
   let capturedTime = 0;
   let hasCaptured = false;
@@ -26,7 +52,7 @@
       if (!all[vid]) {
         all[vid] = {
           id: vid,
-          title: meta.title || '未知视频',
+          title: meta.title || tr('未知视频', 'Unknown video'),
           url: meta.url || `https://www.youtube.com/watch?v=${vid}`,
           thumbnail: `https://img.youtube.com/vi/${vid}/mqdefault.jpg`,
           folderId: null,
@@ -93,17 +119,18 @@
   }
 
   function escapeHtml(str) {
-    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/\n/g, '<br>');
   }
 
   function getVideoTitle() {
     return document.querySelector('h1.ytd-watch-metadata yt-formatted-string')?.textContent?.trim()
       || document.title.replace(' - YouTube', '')
-      || '未知视频';
+      || tr('未知视频', 'Unknown video');
   }
 
   // ── 初始化 ─────────────────────────────────────────
   async function init() {
+    language = (await Store.get('language')) === 'en' ? 'en' : 'zh';
     videoId = getVideoId();
     if (!videoId) return;
 
@@ -129,16 +156,16 @@
     const panel = document.createElement('div');
     panel.id = 'yt-notes-panel';
     panel.innerHTML = `
-      <div class="collapse-icon-wrap" id="expand-btn" title="展开笔记">📝</div>
+      <div class="collapse-icon-wrap" id="expand-btn" title="${tr('展开笔记', 'Expand notes')}">📝</div>
 
       <div class="panel-header">
         <div class="panel-title">
           <span class="dot"></span>
-          视频笔记
+          ${tr('视频笔记', 'Video notes')}
         </div>
         <div style="display:flex;gap:6px;align-items:center;">
-          <button class="panel-toggle" id="folder-assign-btn" title="归档到文件夹">🗂</button>
-          <button class="panel-toggle" id="collapse-btn" title="收起">◀</button>
+          <button class="panel-toggle" id="folder-assign-btn" title="${tr('归档到文件夹', 'Move to folder')}">🗂</button>
+          <button class="panel-toggle" id="collapse-btn" title="${tr('收起', 'Collapse')}">◀</button>
         </div>
       </div>
 
@@ -153,17 +180,17 @@
         <div class="add-note-area">
           <div class="timestamp-display">
             <span class="current-time" id="current-time-display">0:00</span>
-            <button class="capture-btn" id="capture-btn">⏱ 标记时间点</button>
+            <button class="capture-btn" id="capture-btn">${tr('⏱ 标记时间点', '⏱ Mark time')}</button>
           </div>
           <textarea class="note-textarea" id="note-input"
-            placeholder="输入笔记内容...（可不填，仅记录时间点）" rows="3"></textarea>
-          <button class="save-note-btn" id="save-note-btn">💾 保存笔记</button>
+            placeholder="${tr('输入笔记内容...（可不填，仅记录时间点）', 'Write a note... (optional)')}" rows="3"></textarea>
+          <button class="save-note-btn" id="save-note-btn">${tr('💾 保存笔记', '💾 Save note')}</button>
         </div>
 
         <!-- 笔记列表 -->
         <div class="notes-list-header">
-          <span class="notes-count" id="notes-count">共 0 条笔记</span>
-          <button class="clear-all-btn" id="clear-all-btn">清空</button>
+          <span class="notes-count" id="notes-count">${tr('共 0 条笔记', '0 notes')}</span>
+          <button class="clear-all-btn" id="clear-all-btn">${tr('清空', 'Clear all')}</button>
         </div>
         <div class="notes-list" id="notes-list"></div>
       </div>
@@ -189,13 +216,13 @@
         <div class="video-title-line" title="${escapeHtml(currentVideoData.title)}">
           🎬 ${escapeHtml(currentVideoData.title.slice(0, 40))}${currentVideoData.title.length > 40 ? '…' : ''}
         </div>
-        ${folder ? `<div class="folder-tag" style="background:${folder.color}22;color:${folder.color};border-color:${folder.color}44">📁 ${escapeHtml(folder.name)}</div>` : '<div class="folder-tag-empty">未归档</div>'}
+        ${folder ? `<div class="folder-tag" style="background:${folder.color}22;color:${folder.color};border-color:${folder.color}44">📁 ${escapeHtml(folder.name)}</div>` : `<div class="folder-tag-empty">${tr('未归档', 'Unfiled')}</div>`}
       `;
     }
 
     // 笔记计数
     const countEl = document.getElementById('notes-count');
-    if (countEl) countEl.textContent = `共 ${notes.length} 条笔记`;
+    if (countEl) countEl.textContent = tr(`共 ${notes.length} 条笔记`, `${notes.length} notes`);
 
     renderNotes(notes);
   }
@@ -209,7 +236,7 @@
       list.innerHTML = `
         <div class="empty-state">
           <div class="empty-icon">🎬</div>
-          <p>还没有笔记<br>点击「标记时间点」开始记录</p>
+          <p>${tr('还没有笔记<br>点击「标记时间点」开始记录', 'No notes yet<br>Click Mark time to get started')}</p>
         </div>`;
       return;
     }
@@ -222,11 +249,11 @@
             ${formatTime(note.time)}
           </div>
           <div class="note-actions">
-            <button class="note-action-btn edit" data-id="${note.id}" title="编辑">✏️</button>
-            <button class="note-action-btn delete" data-id="${note.id}" title="删除">🗑</button>
+            <button class="note-action-btn edit" data-id="${note.id}" title="${tr('编辑', 'Edit')}">✏️</button>
+            <button class="note-action-btn delete" data-id="${note.id}" title="${tr('删除', 'Delete')}">🗑</button>
           </div>
         </div>
-        <div class="note-text ${!note.text ? 'empty' : ''}">${note.text ? escapeHtml(note.text) : '（仅时间标记）'}</div>
+        <div class="note-text ${!note.text ? 'empty' : ''}">${note.text ? escapeHtml(note.text) : tr('（仅时间标记）', '(Time marker only)')}</div>
       </div>
     `).join('');
 
@@ -242,7 +269,7 @@
         e.stopPropagation();
         await Store.deleteNote(videoId, btn.dataset.id);
         await refreshPanel();
-        showToast('笔记已删除');
+        showToast(tr('笔记已删除', 'Note deleted'));
       });
     });
 
@@ -260,7 +287,7 @@
     if (!card) return;
     card.classList.add('editing');
     const textEl = card.querySelector('.note-text');
-    const original = textEl.innerText === '（仅时间标记）' ? '' : textEl.innerText;
+    const original = textEl.classList.contains('empty') ? '' : textEl.innerText;
     const ta = document.createElement('textarea');
     ta.className = 'edit-textarea';
     ta.value = original;
@@ -285,10 +312,10 @@
 
     const folders = await Store.getFolders();
     picker.innerHTML = `
-      <div class="picker-title">归档到文件夹</div>
+      <div class="picker-title">${tr('归档到文件夹', 'Move to folder')}</div>
       <div class="picker-options">
         <div class="picker-option ${!currentVideoData?.folderId ? 'active' : ''}" data-id="">
-          <span>📂</span> 不归档
+          <span>📂</span> ${tr('不归档', 'Unfiled')}
         </div>
         ${folders.map(f => `
           <div class="picker-option ${currentVideoData?.folderId === f.id ? 'active' : ''}" data-id="${f.id}" style="border-color:${f.color}33">
@@ -296,7 +323,7 @@
           </div>
         `).join('')}
         <div class="picker-option new-folder-opt" data-id="__new__">
-          <span>➕</span> 新建文件夹
+          <span>➕</span> ${tr('新建文件夹', 'New folder')}
         </div>
       </div>
     `;
@@ -306,7 +333,7 @@
       opt.addEventListener('click', async () => {
         const id = opt.dataset.id;
         if (id === '__new__') {
-          const name = prompt('文件夹名称：');
+          const name = prompt(tr('文件夹名称：', 'Folder name:'));
           if (!name) return;
           const color = ['#6366f1','#f59e0b','#10b981','#ef4444','#3b82f6','#ec4899'][Math.floor(Math.random()*6)];
           const folders = await Store.getFolders();
@@ -314,10 +341,10 @@
           folders.push(newF);
           await new Promise(r => chrome.storage.local.set({ folders }, r));
           await Store.setVideoFolder(videoId, newF.id);
-          showToast(`已创建「${name}」并归档`);
+          showToast(tr(`已创建「${name}」并归档`, `Created and moved to ${name}`));
         } else {
           await Store.setVideoFolder(videoId, id || null);
-          showToast(id ? '归档成功' : '已取消归档');
+          showToast(id ? tr('归档成功', 'Moved to folder') : tr('已取消归档', 'Moved to unfiled'));
         }
         picker.style.display = 'none';
         currentVideoData = await Store.getVideo(videoId);
@@ -338,7 +365,7 @@
 
     document.getElementById('capture-btn').addEventListener('click', () => {
       const player = getPlayer();
-      if (!player) { showToast('未找到播放器'); return; }
+      if (!player) { showToast(tr('未找到播放器', 'Player not found')); return; }
       capturedTime = player.currentTime;
       hasCaptured = true;
       const d = document.getElementById('current-time-display');
@@ -346,7 +373,7 @@
       d.textContent = '⏱ ' + formatTime(capturedTime);
       setTimeout(() => { d.style.color = ''; }, 800);
       document.getElementById('note-input').focus();
-      showToast(`已标记 ${formatTime(capturedTime)}`);
+      showToast(tr(`已标记 ${formatTime(capturedTime)}`, `Marked ${formatTime(capturedTime)}`));
     });
 
     document.getElementById('save-note-btn').addEventListener('click', saveCurrentNote);
@@ -357,12 +384,12 @@
     document.getElementById('clear-all-btn').addEventListener('click', async () => {
       const data = await Store.getVideo(videoId);
       if (!data || data.notes.length === 0) return;
-      if (!confirm('确定清空本视频所有笔记？')) return;
+      if (!confirm(tr('确定清空本视频所有笔记？', 'Clear all notes for this video?'))) return;
       const all = await Store.getAllVideos();
       all[videoId].notes = [];
       await new Promise(r => chrome.storage.local.set({ videos: all }, r));
       await refreshPanel();
-      showToast('已清空笔记');
+      showToast(tr('已清空笔记', 'Notes cleared'));
     });
   }
 
@@ -379,16 +406,16 @@
     input.value = '';
     hasCaptured = false;
     document.getElementById('current-time-display').textContent = formatTime(player ? player.currentTime : 0);
-    showToast(`笔记已保存 @ ${formatTime(time)}`);
+    showToast(tr(`笔记已保存 @ ${formatTime(time)}`, `Note saved @ ${formatTime(time)}`));
   }
 
   // ── 跳转时间 ────────────────────────────────────────
   function jumpToTime(time) {
     const player = getPlayer();
-    if (!player) { showToast('未找到播放器'); return; }
+    if (!player) { showToast(tr('未找到播放器', 'Player not found')); return; }
     player.currentTime = time;
     player.play();
-    showToast(`跳转到 ${formatTime(time)}`);
+    showToast(tr(`跳转到 ${formatTime(time)}`, `Jumped to ${formatTime(time)}`));
   }
 
   // ── 实时时钟 ────────────────────────────────────────
